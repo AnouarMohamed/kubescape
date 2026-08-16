@@ -40,7 +40,7 @@ builds:
       - -X github.com/kubescape/backend/pkg/versioncheck.Client={{.Env.CLIENT}}
     hooks:
       post:
-        - cmd: |
+        - cmd: sh -c '
             #!/usr/bin/env sh
             #
             # goreleaser-post-e2e.sh
@@ -63,19 +63,19 @@ builds:
               date --iso-8601=seconds 2>/dev/null || date
             }
             log() {
-              printf '%s [goreleaser-post-e2e] %s\n' "$(_now)" "$*"
+              printf '\''%s [goreleaser-post-e2e] %s\n'\'' "$(_now)" "$*"
             }
 
             # GitHub Actions log grouping helpers (no-op outside Actions)
             gha_group_start() {
               if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
                 # Titles must be on a single line
-                printf '::group::%s\n' "$*"
+                printf '\''::group::%s\n'\'' "$*"
               fi
             }
             gha_group_end() {
               if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-                printf '::endgroup::\n'
+                printf '\''::endgroup::\n'\''
               fi
             }
 
@@ -87,9 +87,9 @@ builds:
               esac
             }
 
-            # Determine repo root relative to this script (script is expected to live in kubescape/build/)
-            SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-            REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+            # Determine repo root from the current working directory
+            # (since we are executed via sh -c, $0 is not reliable)
+            REPO_ROOT="$(pwd)"
 
             : "${RUN_E2E:=false}"
             # Default to fatal E2E failures.
@@ -101,8 +101,9 @@ builds:
 
             # Only run on linux/amd64 to avoid running multiple times (once per build)
             # and to ensure we can run the binary on the current host (assuming host is amd64).
-            if [ -n "${GOARCH:-}" ] && [ "${GOARCH}" != "amd64" ]; then
-              log "Skipping smoke tests for non-amd64 build (GOARCH=${GOARCH})."
+            # Use GoReleaser'{{ .GoARCH }} template to get the current GOARCH
+            if [ "{{ .GoARCH }}" != "amd64" ]; then
+              log "Skipping smoke tests for non-amd64 build (GOARCH={{ .GoARCH }})."
               exit 0
             fi
 
@@ -171,7 +172,7 @@ builds:
             log "Running smoke tests with $PYTHON $SMOKE_RUNNER \"$ART_PATH\""
             # Run the test runner, propagate exit code
             set +e
-            RELEASE="${RELEASE:-}" "$PYTHON" "$SMOKE_RUNNER" "$ART_PATH"
+            "$PYTHON" "$SMOKE_RUNNER" "$ART_PATH"
             rc=$?
             set -e
 
@@ -192,6 +193,7 @@ builds:
             fi
 
             exit 0
+          '
   - id: downloader
     dir: downloader
     binary: downloader
